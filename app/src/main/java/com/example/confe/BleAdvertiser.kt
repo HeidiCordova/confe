@@ -1,6 +1,5 @@
 package com.example.confe
 
-
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -21,6 +20,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import java.util.UUID
+
 @SuppressLint("MissingPermission")
 class BleAdvertiser(
     private val context: Context,
@@ -28,7 +28,7 @@ class BleAdvertiser(
 ) {
 
     companion object {
-        private val SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+        private val SERVICE_UUID = UUID.fromString("0000180F-0000-1000-8000-00805F9B34FB")
         private const val ADVERTISE_DURATION_MS = 30000L
         private const val TAG = "BleAdvertiser"
     }
@@ -57,6 +57,59 @@ class BleAdvertiser(
             }
             Log.e(TAG, "❌ Advertising falló: $errorMessage (código: $errorCode)")
         }
+    }
+
+    // Función para convertir bytes a string hexadecimal legible
+    private fun bytesToHex(bytes: ByteArray): String {
+        return bytes.joinToString(" ") { byte -> "%02X".format(byte) }
+    }
+
+    // Función para mostrar la estructura completa del advertising packet
+    private fun logAdvertisingPacketStructure(identifierBytes: ByteArray) {
+        Log.d(TAG, "═══════════════════════════════════════════════════════")
+        Log.d(TAG, "📦 ESTRUCTURA DEL ADVERTISING PACKET")
+        Log.d(TAG, "═══════════════════════════════════════════════════════")
+
+        // 1. Información del Service UUID
+        Log.d(TAG, "🔵 SERVICE UUID:")
+        Log.d(TAG, "   └── UUID Completo: $SERVICE_UUID")
+        Log.d(TAG, "   └── UUID Comprimido (16-bit): 180F")
+        Log.d(TAG, "   └── Bytes en advertising: [0F 18] (2 bytes)")
+
+        // 2. Información de los datos del identificador
+        Log.d(TAG, "🆔 IDENTIFIER DATA:")
+        Log.d(TAG, "   └── Tamaño: ${identifierBytes.size} bytes")
+        Log.d(TAG, "   └── Contenido (HEX): ${bytesToHex(identifierBytes)}")
+        Log.d(TAG, "   └── Contenido (String): ${String(identifierBytes, Charsets.UTF_8).take(20)}...")
+
+        // 3. Cálculo estimado del tamaño total
+        val flagsSize = 3  // Flags standard BLE
+        val uuidSize = 4   // 2 bytes UUID + 2 bytes header
+        val serviceDataHeaderSize = 2  // Header para service data
+        val serviceDataSize = identifierBytes.size
+        val totalEstimated = flagsSize + uuidSize + serviceDataHeaderSize + serviceDataSize
+
+        Log.d(TAG, "📊 CÁLCULO DE TAMAÑO:")
+        Log.d(TAG, "   ├── Flags: $flagsSize bytes")
+        Log.d(TAG, "   ├── Service UUID: $uuidSize bytes (2 + 2 header)")
+        Log.d(TAG, "   ├── Service Data Header: $serviceDataHeaderSize bytes")
+        Log.d(TAG, "   ├── Service Data Payload: $serviceDataSize bytes")
+        Log.d(TAG, "   └── TOTAL ESTIMADO: $totalEstimated bytes (máximo: 31 bytes)")
+
+        if (totalEstimated > 31) {
+            Log.w(TAG, "⚠️  ADVERTENCIA: Tamaño excede el límite de 31 bytes!")
+        } else {
+            Log.d(TAG, "✅ Tamaño dentro del límite permitido")
+        }
+
+        // 4. Lo que vería un scanner
+        Log.d(TAG, "🔍 LO QUE VERÍA UN SCANNER:")
+        Log.d(TAG, "   ├── Device Address: XX:XX:XX:XX:XX:XX (MAC address)")
+        Log.d(TAG, "   ├── RSSI: -XX dBm (señal de fuerza)")
+        Log.d(TAG, "   ├── Service UUID: 0000180F-0000-1000-8000-00805F9B34FB")
+        Log.d(TAG, "   └── Service Data: ${bytesToHex(identifierBytes)}")
+
+        Log.d(TAG, "═══════════════════════════════════════════════════════")
     }
 
     // FUNCIÓN PARA VERIFICAR PERMISOS
@@ -100,7 +153,8 @@ class BleAdvertiser(
 
             val identifierBytes = UserIdentifier.toBytes()
 
-            Log.d(TAG, "📊 Tamaño de datos: ${identifierBytes.size} bytes")
+            // LOG DETALLADO DE LA ESTRUCTURA DEL PACKET
+            logAdvertisingPacketStructure(identifierBytes)
 
             val data = AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
@@ -109,7 +163,12 @@ class BleAdvertiser(
                 .addServiceData(ParcelUuid(SERVICE_UUID), identifierBytes)
                 .build()
 
-            Log.d(TAG, "📡 Iniciando transmisión...")
+            Log.d(TAG, "📡 Iniciando transmisión con configuración:")
+            Log.d(TAG, "   ├── Modo: LOW_POWER")
+            Log.d(TAG, "   ├── Potencia TX: LOW")
+            Log.d(TAG, "   ├── Conectable: NO")
+            Log.d(TAG, "   └── Duración: ${ADVERTISE_DURATION_MS/1000} segundos")
+
             bluetoothLeAdvertiser?.startAdvertising(settings, data, advertiseCallback)
             scheduleStopAdvertising()
 
